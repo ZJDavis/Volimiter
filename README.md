@@ -96,25 +96,6 @@ Volimiter currently uses the following Android capabilities:
 
 The Device Admin behavior and app icon hiding feature should be clearly explained to users before release. These features affect user control and may require careful policy review before publishing on Google Play.
 
-## Google Play Preparation Checklist
-
-Before publishing, complete the following:
-
-- [ ] Replace the package name `com.example.volimiter` with a final production package name
-- [ ] Update `targetSdk` to the current Google Play requirement
-- [ ] Add a proper app icon and adaptive icon
-- [ ] Add screenshots to this README
-- [ ] Add a privacy policy
-- [ ] Complete the Google Play Data safety form
-- [ ] Add clear in-app disclosure for Device Admin usage
-- [ ] Make stopping, disabling admin, and uninstalling clear and user-controlled
-- [ ] Decide whether hiding the launcher icon should remain in the Play Store version
-- [ ] Add real unit/instrumentation tests
-- [ ] Remove generated APK/AAB files from the repository
-- [ ] Remove local machine files such as `local.properties` and `.idea/workspace.xml`
-- [ ] Create a signed release build or Android App Bundle
-- [ ] Test the release build on a physical device
-
 ## Known Limitations
 
 - Current UI is functional but minimal.
