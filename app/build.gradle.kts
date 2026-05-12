@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.volimiter"
+    namespace = "com.zjdavis.volimiter"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -11,11 +11,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.volimiter"
+        applicationId = "com.zjdavis.volimiter"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 3
-        versionName = "1.1.1"
+        targetSdk = 36
+        versionCode = 4
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

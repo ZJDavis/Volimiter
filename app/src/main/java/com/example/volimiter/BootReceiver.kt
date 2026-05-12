@@ -1,4 +1,4 @@
-package com.example.volimiter
+package com.zjdavis.volimiter
 
 import android.content.BroadcastReceiver
 import android.content.Context

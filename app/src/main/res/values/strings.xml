@@ -1,3 +1,33 @@
 <resources>
     <string name="app_name">Volimiter</string>
+
+    <string name="onboarding_title">Welcome to Volimiter</string>
+
+    <string name="onboarding_message">
+        Volimiter helps limit media volume when audio is playing through the device speaker.
+
+        What Volimiter controls:
+        • Media volume while the device speaker is in use
+        • A foreground service that monitors media volume while active
+        • Optional restart after device reboot
+        • PIN protection before stopping Volimiter
+        • Optional Device Admin permission to make Volimiter harder to remove while active
+
+        What Volimiter does not do:
+        • It does not record audio
+        • It does not use the microphone
+        • It does not upload your PIN or settings
+        • It does not limit headphone or Bluetooth volume
+        • It does not hide itself from the launcher
+
+        Only enable Device Admin if you understand that it may prevent normal uninstallation until Volimiter is stopped with the PIN.
+    </string>
+
+    <string name="device_admin_explanation">
+        Volimiter uses Device Admin permission to make the app harder to uninstall while it is active. This is intended for parent-managed or self-control use. To uninstall Volimiter, first open the app, enter the PIN, and stop Volimiter.
+    </string>
+
+    <string name="privacy_summary">
+        Volimiter stores your PIN and volume settings locally on this device. It does not record audio, use the microphone, collect personal information, or send data to a server.
+    </string>
 </resources>

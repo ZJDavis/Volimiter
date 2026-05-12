@@ -41,8 +41,8 @@
         android:layout_height="wrap_content"/>
 
     <Button
-        android:id="@+id/hideBtn"
-        android:text="Hide App Icon"
+        android:id="@+id/privacyBtn"
+        android:text="Privacy Policy"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"/>

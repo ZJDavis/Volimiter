@@ -115,6 +115,17 @@ The Device Admin behavior and app icon hiding feature should be clearly explaine
 - Add Play Store screenshots and listing text
 - Review Google Play policy risk around uninstall protection and icon hiding
 
+## Screenshot list for later
+
+_Once the app is ready, take screenshots of:_
+
+1. Main screen with the volume slider.
+2. First-run onboarding dialog.
+3. PIN setup dialog.
+4. Running state / notification.
+5. Device Admin permission explanation.
+6. Privacy policy dialog.
+
 ## License
 
 No license has been selected yet.

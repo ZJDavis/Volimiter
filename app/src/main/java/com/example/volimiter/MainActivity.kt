@@ -1,4 +1,4 @@
-package com.example.volimiter
+package com.zjdavis.volimiter
 
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.result.contract.ActivityResultContracts
 
 class MainActivity : AppCompatActivity() {
 
@@ -16,9 +17,19 @@ class MainActivity : AppCompatActivity() {
     private lateinit var devicePolicyManager: DevicePolicyManager
     private lateinit var adminComponent: ComponentName
 
-    companion object {
-        const val REQUEST_DEVICE_ADMIN = 1001
-    }
+    private val deviceAdminLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val volume = prefs.getInt("pending_volume", 5)
+                startLimiter(volume)
+            } else {
+                Toast.makeText(
+                    this,
+                    "Device admin not granted — uninstall protection inactive.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,6 +39,8 @@ class MainActivity : AppCompatActivity() {
         devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         adminComponent = ComponentName(this, VolimiterDeviceAdmin::class.java)
 
+        showOnboardingIfNeeded()
+
         val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         val maxSystemVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
 
@@ -35,30 +48,12 @@ class MainActivity : AppCompatActivity() {
         val label = findViewById<TextView>(R.id.label)
         val startBtn = findViewById<Button>(R.id.toggleBtn)
         val stopBtn = findViewById<Button>(R.id.stopBtn)
-        val hideBtn = findViewById<Button>(R.id.hideBtn)
+        val privacyBtn = findViewById<Button>(R.id.privacyBtn)
 
         val savedVolume = prefs.getInt("max_volume", 5)
         seekBar.max = maxSystemVolume
         seekBar.progress = savedVolume
         label.text = "Max volume: $savedVolume / $maxSystemVolume"
-        hideBtn.text = if (IconManager.isIconHidden(this)) "Show App Icon" else "Hide App Icon"
-        hideBtn.setOnClickListener {
-            if (IconManager.isIconHidden(this)) {
-                showPinPrompt("Enter PIN to show app icon") {
-                    IconManager.showIcon(this)
-                    hideBtn.text = "Hide App Icon"
-                    Toast.makeText(this, "Icon restored.", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                showPinPrompt("Enter PIN to hide app icon") {
-                    IconManager.hideIcon(this)
-                    hideBtn.text = "Show App Icon"
-                    Toast.makeText(this,
-                        "Icon hidden. Open via Settings → Apps → Volimiter to restore it.",
-                        Toast.LENGTH_LONG).show()
-                }
-            }
-        }
 
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
@@ -88,6 +83,13 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "Volimiter stopped.", Toast.LENGTH_SHORT).show()
             }
         }
+        privacyBtn.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Privacy Policy")
+                .setMessage(getString(R.string.privacy_summary))
+                .setPositiveButton("OK", null)
+                .show()
+        }
     }
 
     private fun requestDeviceAdminAndStart(volume: Int) {
@@ -96,24 +98,14 @@ class MainActivity : AppCompatActivity() {
                 putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
                 putExtra(
                     DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                    "Volimiter needs device admin rights to prevent uninstallation."
+                    getString(R.string.device_admin_explanation)
                 )
             }
-            startActivityForResult(intent, REQUEST_DEVICE_ADMIN)
+            deviceAdminLauncher.launch(intent)
             // Store volume so we can start after the user approves
             prefs.edit().putInt("pending_volume", volume).apply()
         } else {
             startLimiter(volume)
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_DEVICE_ADMIN && resultCode == RESULT_OK) {
-            val volume = prefs.getInt("pending_volume", 5)
-            startLimiter(volume)
-        } else if (requestCode == REQUEST_DEVICE_ADMIN) {
-            Toast.makeText(this, "Device admin not granted — uninstall protection inactive.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -178,5 +170,25 @@ class MainActivity : AppCompatActivity() {
             .putBoolean("was_running", running)
             .putInt("max_volume", prefs.getInt("max_volume", 5))
             .apply()
+    }
+
+    private fun showOnboardingIfNeeded() {
+        val hasSeenOnboarding = prefs.getBoolean("has_seen_onboarding", false)
+
+        if (!hasSeenOnboarding) {
+            AlertDialog.Builder(this)
+                .setTitle(getString(R.string.onboarding_title))
+                .setMessage(getString(R.string.onboarding_message))
+                .setPositiveButton("I Understand") { _, _ ->
+                    prefs.edit()
+                        .putBoolean("has_seen_onboarding", true)
+                        .apply()
+                }
+                .setNegativeButton("Exit") { _, _ ->
+                    finish()
+                }
+                .setCancelable(false)
+                .show()
+        }
     }
 }
