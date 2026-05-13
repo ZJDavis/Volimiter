@@ -9,6 +9,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import androidx.core.content.edit
 
 object PinManager {
 
@@ -44,10 +45,10 @@ object PinManager {
         val encrypted = cipher.doFinal(pin.toByteArray(Charsets.UTF_8))
         val iv = cipher.iv
 
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .putString(PREFS_PIN, Base64.encodeToString(encrypted, Base64.DEFAULT))
-            .putString(PREFS_IV, Base64.encodeToString(iv, Base64.DEFAULT))
-            .apply()
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
+            putString(PREFS_PIN, Base64.encodeToString(encrypted, Base64.DEFAULT))
+            putString(PREFS_IV, Base64.encodeToString(iv, Base64.DEFAULT))
+        }
     }
 
     fun checkPin(context: Context, candidate: String): Boolean {
@@ -63,7 +64,7 @@ object PinManager {
 
             val decrypted = cipher.doFinal(Base64.decode(encryptedB64, Base64.DEFAULT))
             String(decrypted, Charsets.UTF_8) == candidate
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
@@ -73,10 +74,11 @@ object PinManager {
         return prefs.getString(PREFS_PIN, null) != null
     }
 
+    @Suppress("unused")
     fun clearPin(context: Context) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .remove(PREFS_PIN)
-            .remove(PREFS_IV)
-            .apply()
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
+            remove(PREFS_PIN)
+            remove(PREFS_IV)
+        }
     }
 }

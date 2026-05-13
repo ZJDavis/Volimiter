@@ -2,7 +2,6 @@ package com.zjdavis.volimiter
 
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.os.Bundle
@@ -10,10 +9,13 @@ import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.SharedPreferences
+import android.text.InputType
+import androidx.core.content.edit
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var prefs: android.content.SharedPreferences
+    private lateinit var prefs: SharedPreferences
     private lateinit var devicePolicyManager: DevicePolicyManager
     private lateinit var adminComponent: ComponentName
 
@@ -35,8 +37,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        prefs = getSharedPreferences("volimiter", Context.MODE_PRIVATE)
-        devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        prefs = getSharedPreferences("volimiter", MODE_PRIVATE)
+        devicePolicyManager = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
         adminComponent = ComponentName(this, VolimiterDeviceAdmin::class.java)
 
         showOnboardingIfNeeded()
@@ -53,12 +55,14 @@ class MainActivity : AppCompatActivity() {
         val savedVolume = prefs.getInt("max_volume", 5)
         seekBar.max = maxSystemVolume
         seekBar.progress = savedVolume
-        label.text = "Max volume: $savedVolume / $maxSystemVolume"
+        label.text = getString(R.string.max_volume_format, savedVolume, maxSystemVolume)
 
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
-                label.text = "Max volume: $progress / $maxSystemVolume"
-                prefs.edit().putInt("max_volume", progress).apply()
+                label.text = getString(R.string.max_volume_format, progress, maxSystemVolume)
+                prefs.edit {
+                    putInt("max_volume", progress)
+                }
             }
             override fun onStartTrackingTouch(sb: SeekBar) {}
             override fun onStopTrackingTouch(sb: SeekBar) {}
@@ -75,7 +79,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         stopBtn.setOnClickListener {
-            showPinPrompt("Enter PIN to stop Volimiter") {
+            showStopPinPrompt {
                 // Revoke device admin before stopping
                 devicePolicyManager.removeActiveAdmin(adminComponent)
                 stopService(Intent(this, VolimiterService::class.java))
@@ -103,7 +107,9 @@ class MainActivity : AppCompatActivity() {
             }
             deviceAdminLauncher.launch(intent)
             // Store volume so we can start after the user approves
-            prefs.edit().putInt("pending_volume", volume).apply()
+            prefs.edit {
+                putInt("pending_volume", volume)
+            }
         } else {
             startLimiter(volume)
         }
@@ -120,8 +126,8 @@ class MainActivity : AppCompatActivity() {
     private fun showSetPinDialog(onSuccess: () -> Unit) {
         val input = EditText(this).apply {
             hint = "Choose a 4-digit PIN"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                    android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            inputType = InputType.TYPE_CLASS_NUMBER or
+                    InputType.TYPE_NUMBER_VARIATION_PASSWORD
         }
 
         AlertDialog.Builder(this)
@@ -142,15 +148,15 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun showPinPrompt(title: String, onSuccess: () -> Unit) {
+    private fun showStopPinPrompt(onSuccess: () -> Unit) {
         val input = EditText(this).apply {
             hint = "Enter PIN"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                    android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            inputType = InputType.TYPE_CLASS_NUMBER or
+                    InputType.TYPE_NUMBER_VARIATION_PASSWORD
         }
 
         AlertDialog.Builder(this)
-            .setTitle(title)
+            .setTitle(getString(R.string.enter_pin_to_stop))
             .setView(input)
             .setPositiveButton("Confirm") { _, _ ->
                 if (PinManager.checkPin(this, input.text.toString())) {
@@ -165,11 +171,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveBootState(running: Boolean) {
         val deviceContext = createDeviceProtectedStorageContext()
-        deviceContext.getSharedPreferences("volimiter_boot", Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean("was_running", running)
-            .putInt("max_volume", prefs.getInt("max_volume", 5))
-            .apply()
+        deviceContext.getSharedPreferences("volimiter_boot", MODE_PRIVATE).edit {
+            putBoolean("was_running", running)
+            putInt("max_volume", prefs.getInt("max_volume", 5))
+        }
     }
 
     private fun showOnboardingIfNeeded() {
@@ -180,9 +185,9 @@ class MainActivity : AppCompatActivity() {
                 .setTitle(getString(R.string.onboarding_title))
                 .setMessage(getString(R.string.onboarding_message))
                 .setPositiveButton("I Understand") { _, _ ->
-                    prefs.edit()
-                        .putBoolean("has_seen_onboarding", true)
-                        .apply()
+                    prefs.edit {
+                        putBoolean("has_seen_onboarding", true)
+                    }
                 }
                 .setNegativeButton("Exit") { _, _ ->
                     finish()

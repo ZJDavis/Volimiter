@@ -1,7 +1,6 @@
 package com.zjdavis.volimiter
 
 import android.app.*
-import android.content.Context
 import android.content.Intent
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -45,7 +44,7 @@ class VolimiterService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         createNotificationChannel()
         startForeground(1, buildNotification())
     }
