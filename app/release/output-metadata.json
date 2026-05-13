@@ -4,15 +4,15 @@
     "type": "APK",
     "kind": "Directory"
   },
-  "applicationId": "com.example.volimiter",
+  "applicationId": "com.zjdavis.volimiter",
   "variantName": "release",
   "elements": [
     {
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 1,
-      "versionName": "1.0",
+      "versionCode": 6,
+      "versionName": "1.2.2",
       "outputFile": "app-release.apk"
     }
   ],
