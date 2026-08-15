@@ -14,7 +14,7 @@ class BootReceiver : BroadcastReceiver() {
             val serviceIntent = Intent(context, VolimiterService::class.java).apply {
                 putExtra(
                     VolimiterSettings.EXTRA_MAX_VOLUME,
-                    VolimiterSettings.getBootMaxVolume(context)
+                    VolimiterSettings.getBootConfig(context).maxVolume
                 )
             }
             context.startForegroundService(serviceIntent)

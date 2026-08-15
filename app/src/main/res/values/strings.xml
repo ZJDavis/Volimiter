@@ -1,5 +1,22 @@
 <resources>
     <string name="app_name">Volimiter</string>
+    <string name="screen_title">🔊 Volimiter</string>
+    <string name="max_volume_default">Max volume: 5 / 15</string>
+    <string name="quiet_volume_default">Quiet-hours maximum: 0 / 15</string>
+    <string name="start_volimiter">Start Volimiter</string>
+    <string name="stop_volimiter">Stop Volimiter</string>
+    <string name="quiet_hours_mode">Quiet Hours mode</string>
+    <string name="quiet_volume_format">Quiet-hours maximum: %1$d / %2$d</string>
+    <string name="quiet_start_format">Start: %1$s</string>
+    <string name="quiet_end_format">End: %1$s</string>
+    <string name="quiet_start_default">Start: 22:00</string>
+    <string name="quiet_end_default">End: 07:00</string>
+    <string name="unlock_settings_title">Enter PIN to change settings</string>
+    <string name="settings_unlocked">Settings unlocked until you leave this screen.</string>
+    <string name="notification_title">Volimiter Active</string>
+    <string name="notification_standard_mode">Standard</string>
+    <string name="notification_quiet_hours">Quiet Hours</string>
+    <string name="notification_limit_format">%1$s · Max volume: %2$d / %3$d</string>
     <string name="onboarding_title">Welcome to Volimiter</string>
     <string name="onboarding_message">
         Volimiter helps limit media volume when audio is playing through the device speaker.
@@ -10,6 +27,8 @@
         • Optional restart after device reboot
         • PIN protection before stopping Volimiter
         • Required Device Admin permission, explicitly granted by you, to prevent removal while active
+
+        • Optional Quiet Hours with a stricter daily volume limit
 
         What Volimiter does not do:
         • It does not record audio

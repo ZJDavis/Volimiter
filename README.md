@@ -11,12 +11,16 @@ Volimiter is an Android utility app that limits media volume while the device is
 - Restarts after device boot when previously enabled
 - Allows higher volume when wired, Bluetooth, or USB headphones are connected
 - PIN protection for stopping the limiter
+- PIN protection before changing active volume settings
+- Optional daily Quiet Hours with a separate, stricter volume limit
 - Required, explicitly granted Device Admin activation for uninstall protection
 - Optional launcher icon hiding/restoring from inside the app
 
 ## How It Works
 
 Volimiter monitors the device's `STREAM_MUSIC` volume while the service is running. If no supported headset device is detected and the current media volume exceeds the configured maximum, the app lowers it back to the selected limit.
+
+When Quiet Hours is enabled, Volimiter applies the stricter quiet-hours limit during the configured daily time window. Overnight windows are supported. The default quiet-hours limit is 0.
 
 The app stores the selected volume locally using Android `SharedPreferences`. The PIN is encrypted using the Android Keystore with AES/GCM before being saved locally.
 

@@ -1,23 +1,42 @@
 package com.zjdavis.volimiter
 
+import android.app.TimePickerDialog
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Intent
 import android.media.AudioManager
 import android.os.Bundle
 import android.text.InputType
+import android.text.format.DateFormat
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.switchmaterial.SwitchMaterial
+import java.util.Calendar
 
 class MainActivity : AppCompatActivity() {
     private lateinit var devicePolicyManager: DevicePolicyManager
     private lateinit var adminComponent: ComponentName
+    private lateinit var normalVolumeSeekBar: SeekBar
+    private lateinit var normalVolumeLabel: TextView
+    private lateinit var quietHoursSwitch: SwitchMaterial
+    private lateinit var quietHoursControls: LinearLayout
+    private lateinit var quietVolumeSeekBar: SeekBar
+    private lateinit var quietVolumeLabel: TextView
+    private lateinit var quietStartButton: Button
+    private lateinit var quietEndButton: Button
+    private var maxSystemVolume = 0
+    private var config = LimiterConfig()
+    private var settingsUnlocked = false
+    private var unlockDialogShowing = false
+    private var renderingSettings = false
 
     private val deviceAdminLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -34,46 +53,153 @@ class MainActivity : AppCompatActivity() {
 
         devicePolicyManager = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
         adminComponent = ComponentName(this, VolimiterDeviceAdmin::class.java)
+        maxSystemVolume = (getSystemService(AUDIO_SERVICE) as AudioManager)
+            .getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        bindViews()
+        config = VolimiterSettings.getConfig(this)
+        renderSettings()
+        setUpSettingsListeners()
+        setUpActionButtons()
         showOnboardingIfNeeded()
+    }
 
-        val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
-        val maxSystemVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val seekBar = findViewById<SeekBar>(R.id.seekBar)
-        val label = findViewById<TextView>(R.id.label)
-        val savedVolume = VolimiterSettings.getMaxVolume(this)
+    override fun onStop() {
+        settingsUnlocked = false
+        super.onStop()
+    }
 
-        seekBar.max = maxSystemVolume
-        seekBar.progress = savedVolume
-        label.text = getString(R.string.max_volume_format, savedVolume, maxSystemVolume)
-        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
-                label.text = getString(R.string.max_volume_format, progress, maxSystemVolume)
+    private fun bindViews() {
+        normalVolumeSeekBar = findViewById(R.id.seekBar)
+        normalVolumeLabel = findViewById(R.id.label)
+        quietHoursSwitch = findViewById(R.id.quietHoursSwitch)
+        quietHoursControls = findViewById(R.id.quietHoursControls)
+        quietVolumeSeekBar = findViewById(R.id.quietVolumeSeekBar)
+        quietVolumeLabel = findViewById(R.id.quietVolumeLabel)
+        quietStartButton = findViewById(R.id.quietStartButton)
+        quietEndButton = findViewById(R.id.quietEndButton)
+    }
+
+    private fun renderSettings() {
+        renderingSettings = true
+        normalVolumeSeekBar.max = maxSystemVolume
+        normalVolumeSeekBar.progress = config.maxVolume.coerceIn(0, maxSystemVolume)
+        normalVolumeLabel.text = getString(
+            R.string.max_volume_format,
+            normalVolumeSeekBar.progress,
+            maxSystemVolume
+        )
+        quietHoursSwitch.isChecked = config.quietHoursEnabled
+        quietHoursControls.visibility = if (config.quietHoursEnabled) View.VISIBLE else View.GONE
+        quietVolumeSeekBar.max = maxSystemVolume
+        quietVolumeSeekBar.progress = config.quietHoursVolume.coerceIn(0, maxSystemVolume)
+        quietVolumeLabel.text = getString(
+            R.string.quiet_volume_format,
+            quietVolumeSeekBar.progress,
+            maxSystemVolume
+        )
+        quietStartButton.text = getString(
+            R.string.quiet_start_format,
+            formatTime(config.quietHoursStartMinutes)
+        )
+        quietEndButton.text = getString(
+            R.string.quiet_end_format,
+            formatTime(config.quietHoursEndMinutes)
+        )
+        renderingSettings = false
+    }
+
+    private fun setUpSettingsListeners() {
+        normalVolumeSeekBar.setOnSeekBarChangeListener(
+            protectedSeekBarListener { volume ->
+                config = config.copy(maxVolume = volume)
+                persistConfig()
+            }
+        )
+        quietVolumeSeekBar.setOnSeekBarChangeListener(
+            protectedSeekBarListener { volume ->
+                config = config.copy(quietHoursVolume = volume)
+                persistConfig()
+            }
+        )
+
+        quietHoursSwitch.setOnCheckedChangeListener { _, enabled ->
+            if (renderingSettings) return@setOnCheckedChangeListener
+            withSettingsAccess(
+                onAllowed = {
+                    config = config.copy(quietHoursEnabled = enabled)
+                    persistConfig()
+                    renderSettings()
+                },
+                onDenied = ::renderSettings
+            )
+        }
+
+        quietStartButton.setOnClickListener {
+            withSettingsAccess(onAllowed = {
+                showTimePicker(config.quietHoursStartMinutes) { minutes ->
+                    config = config.copy(quietHoursStartMinutes = minutes)
+                    persistConfig()
+                    renderSettings()
+                }
+            })
+        }
+        quietEndButton.setOnClickListener {
+            withSettingsAccess(onAllowed = {
+                showTimePicker(config.quietHoursEndMinutes) { minutes ->
+                    config = config.copy(quietHoursEndMinutes = minutes)
+                    persistConfig()
+                    renderSettings()
+                }
+            })
+        }
+    }
+
+    private fun protectedSeekBarListener(onSaved: (Int) -> Unit) =
+        object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                val label = if (seekBar === normalVolumeSeekBar) {
+                    normalVolumeLabel
+                } else {
+                    quietVolumeLabel
+                }
+                val format = if (seekBar === normalVolumeSeekBar) {
+                    R.string.max_volume_format
+                } else {
+                    R.string.quiet_volume_format
+                }
+                label.text = getString(format, progress, maxSystemVolume)
             }
 
-            override fun onStartTrackingTouch(sb: SeekBar) = Unit
-
-            override fun onStopTrackingTouch(sb: SeekBar) {
-                VolimiterSettings.setMaxVolume(this@MainActivity, sb.progress)
+            override fun onStartTrackingTouch(seekBar: SeekBar) {
+                if (settingsRequirePin()) showUnlockSettingsPrompt()
             }
-        })
 
-        findViewById<Button>(R.id.toggleBtn).setOnClickListener {
-            if (!PinManager.hasPin(this)) {
-                showSetPinDialog { requestDeviceAdminAndStart(seekBar.progress) }
-            } else {
-                requestDeviceAdminAndStart(seekBar.progress)
+            override fun onStopTrackingTouch(seekBar: SeekBar) {
+                if (settingsRequirePin()) {
+                    renderSettings()
+                } else {
+                    onSaved(seekBar.progress)
+                }
             }
         }
 
+    private fun setUpActionButtons() {
+        findViewById<Button>(R.id.toggleBtn).setOnClickListener {
+            if (!PinManager.hasPin(this)) {
+                showSetPinDialog { requestDeviceAdminAndStart(config.maxVolume) }
+            } else {
+                requestDeviceAdminAndStart(config.maxVolume)
+            }
+        }
         findViewById<Button>(R.id.stopBtn).setOnClickListener {
             showStopPinPrompt {
                 devicePolicyManager.removeActiveAdmin(adminComponent)
                 stopService(Intent(this, VolimiterService::class.java))
-                saveBootState(false)
+                VolimiterSettings.saveBootState(this, false, config)
+                settingsUnlocked = false
                 Toast.makeText(this, R.string.volimiter_stopped, Toast.LENGTH_SHORT).show()
             }
         }
-
         findViewById<Button>(R.id.privacyBtn).setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle(R.string.privacy_policy_title)
@@ -81,6 +207,50 @@ class MainActivity : AppCompatActivity() {
                 .setPositiveButton(R.string.ok_button, null)
                 .show()
         }
+    }
+
+    private fun settingsRequirePin() =
+        VolimiterSettings.isLimiterActive(this) && PinManager.hasPin(this) && !settingsUnlocked
+
+    private fun withSettingsAccess(onAllowed: () -> Unit, onDenied: () -> Unit = {}) {
+        if (!settingsRequirePin()) {
+            onAllowed()
+        } else {
+            showUnlockSettingsPrompt(onAllowed, onDenied)
+        }
+    }
+
+    private fun showUnlockSettingsPrompt(
+        onSuccess: () -> Unit = {},
+        onDenied: () -> Unit = {}
+    ) {
+        if (unlockDialogShowing) return
+        unlockDialogShowing = true
+        val input = pinInput()
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.unlock_settings_title)
+            .setView(input)
+            .setPositiveButton(R.string.confirm_button) { _, _ ->
+                unlockDialogShowing = false
+                if (PinManager.checkPin(this, input.text.toString())) {
+                    settingsUnlocked = true
+                    Toast.makeText(this, R.string.settings_unlocked, Toast.LENGTH_SHORT).show()
+                    onSuccess()
+                } else {
+                    Toast.makeText(this, R.string.incorrect_pin, Toast.LENGTH_SHORT).show()
+                    onDenied()
+                }
+            }
+            .setNegativeButton(R.string.cancel_button) { _, _ ->
+                unlockDialogShowing = false
+                onDenied()
+            }
+            .setOnCancelListener {
+                unlockDialogShowing = false
+                onDenied()
+            }
+            .create()
+        dialog.show()
     }
 
     private fun requestDeviceAdminAndStart(volume: Int) {
@@ -100,21 +270,52 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startLimiter(volume: Int) {
-        VolimiterSettings.setMaxVolume(this, volume)
+        config = config.copy(maxVolume = volume)
+        VolimiterSettings.saveConfig(this, config)
+        VolimiterSettings.saveBootState(this, true, config)
         val intent = Intent(this, VolimiterService::class.java).apply {
             putExtra(VolimiterSettings.EXTRA_MAX_VOLUME, volume)
         }
         startForegroundService(intent)
-        saveBootState(true)
         Toast.makeText(this, R.string.volimiter_started, Toast.LENGTH_SHORT).show()
     }
 
-    private fun showSetPinDialog(onSuccess: () -> Unit) {
-        val input = EditText(this).apply {
-            hint = getString(R.string.choose_pin_hint)
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+    private fun persistConfig() {
+        VolimiterSettings.saveConfig(this, config)
+        if (VolimiterSettings.isLimiterActive(this)) {
+            VolimiterSettings.saveBootState(this, true, config)
+            val intent = Intent(this, VolimiterService::class.java).apply {
+                putExtra(VolimiterSettings.EXTRA_MAX_VOLUME, config.maxVolume)
+            }
+            startForegroundService(intent)
         }
+    }
 
+    private fun showTimePicker(initialMinutes: Int, onSelected: (Int) -> Unit) {
+        TimePickerDialog(
+            this,
+            { _, hour, minute -> onSelected(hour * MINUTES_PER_HOUR + minute) },
+            initialMinutes / MINUTES_PER_HOUR,
+            initialMinutes % MINUTES_PER_HOUR,
+            DateFormat.is24HourFormat(this)
+        ).show()
+    }
+
+    private fun formatTime(minutes: Int): String {
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, minutes / MINUTES_PER_HOUR)
+            set(Calendar.MINUTE, minutes % MINUTES_PER_HOUR)
+        }
+        return DateFormat.getTimeFormat(this).format(calendar.time)
+    }
+
+    private fun pinInput() = EditText(this).apply {
+        hint = getString(R.string.enter_pin_hint)
+        inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+    }
+
+    private fun showSetPinDialog(onSuccess: () -> Unit) {
+        val input = pinInput().apply { hint = getString(R.string.choose_pin_hint) }
         AlertDialog.Builder(this)
             .setTitle(R.string.set_pin_title)
             .setMessage(R.string.set_pin_message)
@@ -134,11 +335,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showStopPinPrompt(onSuccess: () -> Unit) {
-        val input = EditText(this).apply {
-            hint = getString(R.string.enter_pin_hint)
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        }
-
+        val input = pinInput()
         AlertDialog.Builder(this)
             .setTitle(R.string.enter_pin_to_stop)
             .setView(input)
@@ -153,14 +350,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun saveBootState(running: Boolean) {
-        VolimiterSettings.saveBootState(
-            this,
-            running,
-            VolimiterSettings.getMaxVolume(this)
-        )
-    }
-
     private fun showOnboardingIfNeeded() {
         if (!VolimiterSettings.hasSeenOnboarding(this)) {
             AlertDialog.Builder(this)
@@ -173,5 +362,9 @@ class MainActivity : AppCompatActivity() {
                 .setCancelable(false)
                 .show()
         }
+    }
+
+    private companion object {
+        const val MINUTES_PER_HOUR = 60
     }
 }

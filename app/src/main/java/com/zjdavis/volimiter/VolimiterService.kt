@@ -11,14 +11,15 @@ import android.media.AudioManager
 import android.os.Handler
 import android.os.HandlerThread
 import androidx.core.app.NotificationCompat
+import java.time.LocalTime
 
 class VolimiterService : Service() {
-
     private lateinit var audioManager: AudioManager
     private lateinit var monitorThread: HandlerThread
     private lateinit var monitorHandler: Handler
-    @Volatile
-    private var maxVolume = VolimiterSettings.DEFAULT_MAX_VOLUME
+    private lateinit var config: LimiterConfig
+    private var effectiveMaxVolume = VolimiterSettings.DEFAULT_MAX_VOLUME
+    private var quietHoursActive = false
     private var headsetConnected = false
 
     private val audioDeviceCallback = object : AudioDeviceCallback() {
@@ -33,13 +34,21 @@ class VolimiterService : Service() {
 
     private val checkVolumeRunnable = object : Runnable {
         override fun run() {
-            if (!headsetConnected) {
-                val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                if (currentVolume > maxVolume) {
-                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxVolume, 0)
-                }
+            enforceVolumeLimit()
+            monitorHandler.postDelayed(this, VOLUME_CHECK_INTERVAL_MS)
+        }
+    }
+
+    private val refreshScheduleRunnable = object : Runnable {
+        override fun run() {
+            val wasQuietHoursActive = quietHoursActive
+            val previousLimit = effectiveMaxVolume
+            refreshEffectiveLimit()
+            if (quietHoursActive != wasQuietHoursActive || effectiveMaxVolume != previousLimit) {
+                enforceVolumeLimit()
+                startForeground(NOTIFICATION_ID, buildNotification())
             }
-            monitorHandler.postDelayed(this, CHECK_INTERVAL_MS)
+            monitorHandler.postDelayed(this, SCHEDULE_CHECK_INTERVAL_MS)
         }
     }
 
@@ -53,13 +62,23 @@ class VolimiterService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        maxVolume = intent?.getIntExtra(
-            VolimiterSettings.EXTRA_MAX_VOLUME,
-            VolimiterSettings.DEFAULT_MAX_VOLUME
-        ) ?: VolimiterSettings.getBootMaxVolume(this)
-
+        config = VolimiterSettings.getBootConfig(this)
+        if (intent != null && intent.hasExtra(VolimiterSettings.EXTRA_MAX_VOLUME)) {
+            config = config.copy(
+                maxVolume = intent.getIntExtra(
+                    VolimiterSettings.EXTRA_MAX_VOLUME,
+                    config.maxVolume
+                )
+            )
+        }
+        refreshEffectiveLimit()
         startForeground(NOTIFICATION_ID, buildNotification())
-        monitorHandler.post { refreshAudioRouteAndCheckVolume() }
+
+        monitorHandler.post {
+            refreshAudioRouteAndCheckVolume()
+            monitorHandler.removeCallbacks(refreshScheduleRunnable)
+            monitorHandler.post(refreshScheduleRunnable)
+        }
         return START_STICKY
     }
 
@@ -72,37 +91,71 @@ class VolimiterService : Service() {
 
     override fun onBind(intent: Intent?) = null
 
+    private fun refreshEffectiveLimit() {
+        val now = LocalTime.now()
+        val currentMinutes = now.hour * MINUTES_PER_HOUR + now.minute
+        quietHoursActive = config.quietHoursEnabled && QuietHoursSchedule.isActive(
+            currentMinutes,
+            config.quietHoursStartMinutes,
+            config.quietHoursEndMinutes
+        )
+        effectiveMaxVolume = if (quietHoursActive) {
+            minOf(config.maxVolume, config.quietHoursVolume)
+        } else {
+            config.maxVolume
+        }
+    }
+
     private fun refreshAudioRouteAndCheckVolume() {
         headsetConnected = audioManager
             .getDevices(AudioManager.GET_DEVICES_OUTPUTS)
             .any { it.type in HEADSET_DEVICE_TYPES }
-
-        // A service can receive multiple start commands; always keep one monitoring loop.
         monitorHandler.removeCallbacks(checkVolumeRunnable)
         monitorHandler.post(checkVolumeRunnable)
     }
 
-    private fun buildNotification(): Notification =
-        NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("Volimiter Active")
+    private fun enforceVolumeLimit() {
+        if (!headsetConnected) {
+            val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            if (currentVolume > effectiveMaxVolume) {
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, effectiveMaxVolume, 0)
+            }
+        }
+    }
+
+    private fun buildNotification(): Notification {
+        val mode = if (quietHoursActive) {
+            getString(R.string.notification_quiet_hours)
+        } else {
+            getString(R.string.notification_standard_mode)
+        }
+        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle(getString(R.string.notification_title))
             .setContentText(
-                "Max volume: $maxVolume / " +
+                getString(
+                    R.string.notification_limit_format,
+                    mode,
+                    effectiveMaxVolume,
                     audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                )
             )
             .setSmallIcon(android.R.drawable.ic_lock_silent_mode)
             .build()
+    }
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
-            "Volimiter",
+            getString(R.string.app_name),
             NotificationManager.IMPORTANCE_LOW
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private companion object {
-        const val CHECK_INTERVAL_MS = 500L
+        const val VOLUME_CHECK_INTERVAL_MS = 500L
+        const val SCHEDULE_CHECK_INTERVAL_MS = 30_000L
+        const val MINUTES_PER_HOUR = 60
         const val NOTIFICATION_ID = 1
         const val NOTIFICATION_CHANNEL_ID = "volimiter"
 
