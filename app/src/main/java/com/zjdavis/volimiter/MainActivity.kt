@@ -5,31 +5,26 @@ import android.content.ComponentName
 import android.content.Intent
 import android.media.AudioManager
 import android.os.Bundle
-import android.widget.*
+import android.text.InputType
+import android.widget.Button
+import android.widget.EditText
+import android.widget.SeekBar
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.activity.result.contract.ActivityResultContracts
-import android.content.SharedPreferences
-import android.text.InputType
-import androidx.core.content.edit
 
 class MainActivity : AppCompatActivity() {
-
-    private lateinit var prefs: SharedPreferences
     private lateinit var devicePolicyManager: DevicePolicyManager
     private lateinit var adminComponent: ComponentName
 
     private val deviceAdminLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK) {
-                val volume = prefs.getInt("pending_volume", 5)
-                startLimiter(volume)
+                startLimiter(VolimiterSettings.getPendingVolume(this))
             } else {
-                Toast.makeText(
-                    this,
-                    "Device admin not granted — uninstall protection inactive.",
-                    Toast.LENGTH_LONG
-                ).show()
+                Toast.makeText(this, R.string.device_admin_required, Toast.LENGTH_LONG).show()
             }
         }
 
@@ -37,61 +32,53 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        prefs = getSharedPreferences("volimiter", MODE_PRIVATE)
         devicePolicyManager = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
         adminComponent = ComponentName(this, VolimiterDeviceAdmin::class.java)
-
         showOnboardingIfNeeded()
 
         val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         val maxSystemVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-
         val seekBar = findViewById<SeekBar>(R.id.seekBar)
         val label = findViewById<TextView>(R.id.label)
-        val startBtn = findViewById<Button>(R.id.toggleBtn)
-        val stopBtn = findViewById<Button>(R.id.stopBtn)
-        val privacyBtn = findViewById<Button>(R.id.privacyBtn)
+        val savedVolume = VolimiterSettings.getMaxVolume(this)
 
-        val savedVolume = prefs.getInt("max_volume", 5)
         seekBar.max = maxSystemVolume
         seekBar.progress = savedVolume
         label.text = getString(R.string.max_volume_format, savedVolume, maxSystemVolume)
-
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
                 label.text = getString(R.string.max_volume_format, progress, maxSystemVolume)
-                prefs.edit {
-                    putInt("max_volume", progress)
-                }
             }
-            override fun onStartTrackingTouch(sb: SeekBar) {}
-            override fun onStopTrackingTouch(sb: SeekBar) {}
+
+            override fun onStartTrackingTouch(sb: SeekBar) = Unit
+
+            override fun onStopTrackingTouch(sb: SeekBar) {
+                VolimiterSettings.setMaxVolume(this@MainActivity, sb.progress)
+            }
         })
 
-        startBtn.setOnClickListener {
+        findViewById<Button>(R.id.toggleBtn).setOnClickListener {
             if (!PinManager.hasPin(this)) {
-                showSetPinDialog {
-                    requestDeviceAdminAndStart(seekBar.progress)
-                }
+                showSetPinDialog { requestDeviceAdminAndStart(seekBar.progress) }
             } else {
                 requestDeviceAdminAndStart(seekBar.progress)
             }
         }
 
-        stopBtn.setOnClickListener {
+        findViewById<Button>(R.id.stopBtn).setOnClickListener {
             showStopPinPrompt {
-                // Revoke device admin before stopping
                 devicePolicyManager.removeActiveAdmin(adminComponent)
                 stopService(Intent(this, VolimiterService::class.java))
                 saveBootState(false)
-                Toast.makeText(this, "Volimiter stopped.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.volimiter_stopped, Toast.LENGTH_SHORT).show()
             }
         }
-        privacyBtn.setOnClickListener {
+
+        findViewById<Button>(R.id.privacyBtn).setOnClickListener {
             AlertDialog.Builder(this)
-                .setTitle("Privacy Policy")
-                .setMessage(getString(R.string.privacy_summary))
-                .setPositiveButton("OK", null)
+                .setTitle(R.string.privacy_policy_title)
+                .setMessage(R.string.privacy_summary)
+                .setPositiveButton(R.string.ok_button, null)
                 .show()
         }
     }
@@ -105,93 +92,84 @@ class MainActivity : AppCompatActivity() {
                     getString(R.string.device_admin_explanation)
                 )
             }
+            VolimiterSettings.setPendingVolume(this, volume)
             deviceAdminLauncher.launch(intent)
-            // Store volume so we can start after the user approves
-            prefs.edit {
-                putInt("pending_volume", volume)
-            }
         } else {
             startLimiter(volume)
         }
     }
 
     private fun startLimiter(volume: Int) {
-        val intent = Intent(this, VolimiterService::class.java)
-        intent.putExtra("MAX_VOLUME", volume)
+        VolimiterSettings.setMaxVolume(this, volume)
+        val intent = Intent(this, VolimiterService::class.java).apply {
+            putExtra(VolimiterSettings.EXTRA_MAX_VOLUME, volume)
+        }
         startForegroundService(intent)
         saveBootState(true)
-        Toast.makeText(this, "Volimiter started!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, R.string.volimiter_started, Toast.LENGTH_SHORT).show()
     }
 
     private fun showSetPinDialog(onSuccess: () -> Unit) {
         val input = EditText(this).apply {
-            hint = "Choose a 4-digit PIN"
-            inputType = InputType.TYPE_CLASS_NUMBER or
-                    InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = getString(R.string.choose_pin_hint)
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Set Volimiter PIN")
-            .setMessage("You'll need this PIN to stop Volimiter. Don't forget it!")
+            .setTitle(R.string.set_pin_title)
+            .setMessage(R.string.set_pin_message)
             .setView(input)
-            .setPositiveButton("Set PIN") { _, _ ->
+            .setPositiveButton(R.string.set_pin_button) { _, _ ->
                 val pin = input.text.toString()
                 if (pin.length < 4) {
-                    Toast.makeText(this, "PIN must be at least 4 digits.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.pin_min_length_error, Toast.LENGTH_SHORT).show()
                 } else {
                     PinManager.savePin(this, pin)
-                    Toast.makeText(this, "PIN set!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.pin_set, Toast.LENGTH_SHORT).show()
                     onSuccess()
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.cancel_button, null)
             .show()
     }
 
     private fun showStopPinPrompt(onSuccess: () -> Unit) {
         val input = EditText(this).apply {
-            hint = "Enter PIN"
-            inputType = InputType.TYPE_CLASS_NUMBER or
-                    InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = getString(R.string.enter_pin_hint)
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
         }
 
         AlertDialog.Builder(this)
-            .setTitle(getString(R.string.enter_pin_to_stop))
+            .setTitle(R.string.enter_pin_to_stop)
             .setView(input)
-            .setPositiveButton("Confirm") { _, _ ->
+            .setPositiveButton(R.string.confirm_button) { _, _ ->
                 if (PinManager.checkPin(this, input.text.toString())) {
                     onSuccess()
                 } else {
-                    Toast.makeText(this, "Incorrect PIN.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.incorrect_pin, Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.cancel_button, null)
             .show()
     }
 
     private fun saveBootState(running: Boolean) {
-        val deviceContext = createDeviceProtectedStorageContext()
-        deviceContext.getSharedPreferences("volimiter_boot", MODE_PRIVATE).edit {
-            putBoolean("was_running", running)
-            putInt("max_volume", prefs.getInt("max_volume", 5))
-        }
+        VolimiterSettings.saveBootState(
+            this,
+            running,
+            VolimiterSettings.getMaxVolume(this)
+        )
     }
 
     private fun showOnboardingIfNeeded() {
-        val hasSeenOnboarding = prefs.getBoolean("has_seen_onboarding", false)
-
-        if (!hasSeenOnboarding) {
+        if (!VolimiterSettings.hasSeenOnboarding(this)) {
             AlertDialog.Builder(this)
-                .setTitle(getString(R.string.onboarding_title))
-                .setMessage(getString(R.string.onboarding_message))
-                .setPositiveButton("I Understand") { _, _ ->
-                    prefs.edit {
-                        putBoolean("has_seen_onboarding", true)
-                    }
+                .setTitle(R.string.onboarding_title)
+                .setMessage(R.string.onboarding_message)
+                .setPositiveButton(R.string.i_understand_button) { _, _ ->
+                    VolimiterSettings.markOnboardingSeen(this)
                 }
-                .setNegativeButton("Exit") { _, _ ->
-                    finish()
-                }
+                .setNegativeButton(R.string.exit_button) { _, _ -> finish() }
                 .setCancelable(false)
                 .show()
         }

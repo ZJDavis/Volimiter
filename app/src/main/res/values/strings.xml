@@ -1,8 +1,6 @@
 <resources>
     <string name="app_name">Volimiter</string>
-
     <string name="onboarding_title">Welcome to Volimiter</string>
-
     <string name="onboarding_message">
         Volimiter helps limit media volume when audio is playing through the device speaker.
 
@@ -11,7 +9,7 @@
         • A foreground service that monitors media volume while active
         • Optional restart after device reboot
         • PIN protection before stopping Volimiter
-        • Optional Device Admin permission to make Volimiter harder to remove while active
+        • Required Device Admin permission, explicitly granted by you, to prevent removal while active
 
         What Volimiter does not do:
         • It does not record audio
@@ -20,53 +18,27 @@
         • It does not limit headphone or Bluetooth volume
         • It does not hide itself from the launcher
 
-        Only enable Device Admin if you understand that it may prevent normal uninstallation until Volimiter is stopped with the PIN.
+        Starting Volimiter requires you to explicitly grant Device Admin. This prevents normal uninstallation until Volimiter is stopped with the PIN.
     </string>
-
-    <string name="device_admin_explanation">
-        Volimiter uses Device Admin permission to make the app harder to uninstall while it is active. This is intended for parent-managed or self-control use. To uninstall Volimiter, first open the app, enter the PIN, and stop Volimiter.
-    </string>
-
-    <string name="privacy_summary">
-        Volimiter stores your PIN and volume settings locally on this device. It does not record audio, use the microphone, collect personal information, or send data to a server.
-    </string>
-
+    <string name="device_admin_explanation">Volimiter requires Device Admin permission to prevent the app from being uninstalled while it is active. This is intended for parent-managed or self-control use. To uninstall Volimiter, first open the app, enter the PIN, and stop Volimiter.</string>
+    <string name="device_admin_required">Device Admin permission is required to start Volimiter.</string>
+    <string name="privacy_summary">Volimiter stores your PIN and volume settings locally on this device. It does not record audio, use the microphone, collect personal information, or send data to a server.</string>
     <string name="max_volume_format">Max volume: %1$d / %2$d</string>
-
     <string name="enter_pin_to_stop">Enter PIN to stop Volimiter</string>
-
     <string name="choose_pin_hint">Choose a 4-digit PIN</string>
-
     <string name="enter_pin_hint">Enter PIN</string>
-
     <string name="set_pin_title">Set Volimiter PIN</string>
-
     <string name="set_pin_message">You\'ll need this PIN to stop Volimiter. Don\'t forget it!</string>
-
     <string name="set_pin_button">Set PIN</string>
-
     <string name="confirm_button">Confirm</string>
-
     <string name="cancel_button">Cancel</string>
-
     <string name="ok_button">OK</string>
-
     <string name="exit_button">Exit</string>
-
     <string name="i_understand_button">I Understand</string>
-
     <string name="pin_min_length_error">PIN must be at least 4 digits.</string>
-
     <string name="pin_set">PIN set!</string>
-
     <string name="incorrect_pin">Incorrect PIN.</string>
-
     <string name="volimiter_started">Volimiter started!</string>
-
     <string name="volimiter_stopped">Volimiter stopped.</string>
-
-    <string name="device_admin_not_granted">Device admin not granted — uninstall protection inactive.</string>
-
     <string name="privacy_policy_title">Privacy Policy</string>
-
 </resources>

@@ -11,7 +11,7 @@ Volimiter is an Android utility app that limits media volume while the device is
 - Restarts after device boot when previously enabled
 - Allows higher volume when wired, Bluetooth, or USB headphones are connected
 - PIN protection for stopping the limiter
-- Optional Device Admin activation for uninstall protection
+- Required, explicitly granted Device Admin activation for uninstall protection
 - Optional launcher icon hiding/restoring from inside the app
 
 ## How It Works
@@ -82,7 +82,7 @@ cd Volimiter
 2. Choose the maximum media volume using the slider.
 3. Tap **Start Volimiter**.
 4. Set a PIN when prompted.
-5. Grant Device Admin access if you want uninstall protection.
+5. Explicitly grant the required Device Admin access.
 6. Tap **Stop Volimiter** and enter the PIN to stop the limiter.
 
 ## Permissions and Sensitive Features
@@ -100,7 +100,7 @@ The Device Admin behavior and app icon hiding feature should be clearly explaine
 
 - Current UI is functional but minimal.
 - Tests are still the default Android Studio sample tests.
-- The service checks volume every 500ms using a `Handler`; this is simple but may be optimized later.
+- The service monitors volume on a dedicated background thread and responds to audio-route changes.
 - Device Admin and hidden-icon behavior may create Google Play policy risk if not handled transparently.
 - The current package name is still the default-style `com.example.volimiter`.
 
