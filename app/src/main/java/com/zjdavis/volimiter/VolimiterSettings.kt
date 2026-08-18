@@ -45,12 +45,6 @@ object VolimiterSettings {
         appPreferences(context).edit { writeConfig(config) }
     }
 
-    fun getMaxVolume(context: Context): Int = getConfig(context).maxVolume
-
-    fun setMaxVolume(context: Context, volume: Int) {
-        saveConfig(context, getConfig(context).copy(maxVolume = volume))
-    }
-
     fun getPendingVolume(context: Context): Int =
         appPreferences(context).getInt(KEY_PENDING_VOLUME, DEFAULT_MAX_VOLUME)
 
@@ -72,8 +66,6 @@ object VolimiterSettings {
         val prefs = bootPreferences(context)
         return readConfig(prefs::getInt, prefs::getBoolean)
     }
-
-    fun getBootMaxVolume(context: Context): Int = getBootConfig(context).maxVolume
 
     fun wasRunningAtShutdown(context: Context): Boolean = isLimiterActive(context)
 
